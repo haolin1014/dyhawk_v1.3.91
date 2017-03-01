@@ -26,13 +26,13 @@ function  domethod($json3,$stationaccount,$pdasn)
       	$response=shujuxiazai($json3["username"],$stationaccount);
 		break;							
 		case  "duanxin":
-      	$response=duanxin($json3["username"],$stationaccount,$pdasn,$json3["duanxinstr"]);
+      	$response=duanxin($json3["username"],$stationaccount,$pdasn,$json3["duanxinstr"],$json3['main_username']);
 		break;
 		case  "uploadduanyu":
       	$response=uploadduanyu($json3["username"],$stationaccount,$json3["duanyustr"]);
 		break;			
 		case  "shujutongbu":
-      	$response=shujutongbu($json3["username"],$stationaccount);
+      	$response=shujutongbu($json3["username"],$stationaccount,$json3['main_username']);
 		break;
 		case  "qiandan":
       	$response=qiandan($json3["username"],$stationaccount,$pdasn,$json3["qiandanstr"]);
@@ -117,14 +117,26 @@ function  domethod($json3,$stationaccount,$pdasn)
        $db=conn();
         $result = mysql_query("SELECT * FROM user  where  username='$username' ",$db);  
 		$num= mysql_numrows ($result);
-		if($num!=0)
-		{	
-		  $activation=mysql_result($result,0,"activation");	
-		  $fund=mysql_result($result,0,"fund");
-		  $rate=mysql_result($result,0,"rate");
-		  $name=mysql_result($result,0,"name");
+		$main_username = '';
+		// whl查询是否是子账户登录
+		if($num==0){
+		  $data = searchChildUsername($username,$db);
+		  if($data){
+		  	$parent_username = $data['parent_username'];
+		  	$main_username = $parent_username; 
+		    $result = mysql_query("SELECT * FROM user  where  username='$parent_username' limit 1",$db);
+		    $name = $data['name'];
+		    $activation=mysql_result($result,0,"activation");	
+		    $fund=mysql_result($result,0,"fund");
+		    $rate=mysql_result($result,0,"rate");
+		  }
+		}else{
+			$activation=mysql_result($result,0,"activation");	
+		  	$fund=mysql_result($result,0,"fund");
+		  	$rate=mysql_result($result,0,"rate");
+			$name=mysql_result($result,0,"name");
 		}
-		 $response="$activation"."pxp"."$fund"."pxp"."$rate"."pxp"."$name"."pxp"."0"."pxp";
+		 $response="$activation"."pxp"."$fund"."pxp"."$rate"."pxp"."$name"."pxp"."0"."pxp"."$main_username"."pxp";
 		return  $response;			
 	}
 	
@@ -323,7 +335,7 @@ function  shujuxiazai($username,$stationaccount)
   
 }
 //----------------数据同步---------------------------------
-function  shujutongbu($username,$stationaccount)
+function  shujutongbu($username,$stationaccount,$main_username)
 {
    
    
@@ -354,7 +366,7 @@ function  shujutongbu($username,$stationaccount)
    }   
  
    //短信短语
-   $result = mysql_query("SELECT *  FROM  phrase  where  username='$username' order by id",$db);  
+   $result = mysql_query("SELECT *  FROM  phrase  where  username='$main_username' order by id",$db);  
    $num= mysql_numrows($result);
    $response2="";
    for($i=0;$i<$num;$i++)
@@ -363,7 +375,7 @@ function  shujutongbu($username,$stationaccount)
    } 
    
     //用户账户金额费率
-   $result = mysql_query("SELECT *  FROM  user  where  username='$username'  limit 1",$db);  
+   $result = mysql_query("SELECT *  FROM  user  where  username='$main_username'  limit 1",$db);  
    $num= mysql_numrows($result);
    $response3="";
    for($i=0;$i<$num;$i++)
@@ -547,14 +559,14 @@ function  shujutongbu($username,$stationaccount)
 
 
 //----------------------短信发送-----------------------------------------------
-	function duanxin($username,$stationaccount,$pdasn,$duanxinstr)
+	function duanxin($username,$stationaccount,$pdasn,$duanxinstr,$main_username)
 	{
 		
 	   	$db4=conn4();
 		$db1=conn1();
 		$db=conn();
 		//欠费限制
-		 $result = mysql_query("SELECT * FROM user  where  username='$username' ",$db);  
+		 $result = mysql_query("SELECT * FROM user  where  username='$main_username' ",$db);  
          $num= mysql_numrows ($result);
 		 $fund=0;
 		 if($num!=0)
@@ -677,7 +689,7 @@ function  shujutongbu($username,$stationaccount)
 	   			$stationid=$stationaccount;  //  
 	   			
 	            //whl 发送短信
-				$res = SendMsm::sendOneSMSforBox($rcvnumber_o, $m_content_dx, $username, '','', $huohao,$stationid,1,$wx_content,$expressno,'',1);
+				$res = SendMsm::sendOneSMSforBox($rcvnumber_o, $m_content_dx, $main_username, '','', $huohao,$stationid,1,$wx_content,$expressno,'',1);
 				$resjson = json_decode($res,true);
 				$res = $resjson['status']==0 ? 1 : 0;
 				$msm_sn = $resjson['msm_sn'];
@@ -878,7 +890,17 @@ VALUES ('$pdasn','$stationaccount', '$expressno', '$duanxintime','$duanxinuser',
 		   
 		   $direction=urlencode(mysql_result($result,$i,"direction"));
 		   
-			$response=$response.$expressno."pxp".$expressname."pxp".$expresstype."pxp".$daofuprice."pxp".$daifuprice."pxp".$diandantime."pxp".$diandanuser."pxp".$phonenumber."pxp".$bangdingtime."pxp".$bangdinguser."pxp".$distributeway."pxp".$distributetime."pxp".$distributeuser."pxp".$signingtime."pxp".$signinguser."pxp".$huohao."pxp".$smstatus."pxp".$stationname."pxp".$signingkind."pxp".$homenumber."pxp".$homename."pxp".$homeway."pxp".$waipaitime."pxp".$waipaiuser."pxp".$picstatus."pxp".$payway."pxp".$paycontent."pxp".$direction."pxp";		   
+		   // whl添加pickup
+		   $pickup ='';
+		   $respickup = mysql_query("SELECT  pickup FROM  smtbx_order  where  packageID='$expressno' and devicesn='$pdasn' ",$db2);  
+				$num2= mysql_numrows($respickup);
+
+			if($num2!=0)
+			{
+				$pickup=mysql_result($respickup,0,"pickup");
+			}
+
+			$response=$response.$expressno."pxp".$expressname."pxp".$expresstype."pxp".$daofuprice."pxp".$daifuprice."pxp".$diandantime."pxp".$diandanuser."pxp".$phonenumber."pxp".$bangdingtime."pxp".$bangdinguser."pxp".$distributeway."pxp".$distributetime."pxp".$distributeuser."pxp".$signingtime."pxp".$signinguser."pxp".$huohao."pxp".$smstatus."pxp".$stationname."pxp".$signingkind."pxp".$homenumber."pxp".$homename."pxp".$homeway."pxp".$waipaitime."pxp".$waipaiuser."pxp".$picstatus."pxp".$payway."pxp".$paycontent."pxp".$direction."pxp".$pickup."pxp";		   
 		
 		}
 
@@ -941,8 +963,18 @@ VALUES ('$pdasn','$stationaccount', '$expressno', '$duanxintime','$duanxinuser',
 	 		}
 		      
 		   $direction=urlencode(mysql_result($result,$i,"direction"));
+
+		   // whl添加pickup
+	       $pickup ='';
+	       $respickup = mysql_query("SELECT  pickup FROM  smtbx_order  where  packageID='$expressno' and devicesn='$pdasn'",$db2);  
+	   	   $num2= mysql_numrows($respickup);
+
+		   if($num2!=0)
+		   {
+		   		$pickup=mysql_result($respickup,0,"pickup");
+		   }
 		   
-			$response=$response.$expressno."pxp".$expressname."pxp".$expresstype."pxp".$daofuprice."pxp".$daifuprice."pxp".$diandantime."pxp".$diandanuser."pxp".$phonenumber."pxp".$bangdingtime."pxp".$bangdinguser."pxp".$distributeway."pxp".$distributetime."pxp".$distributeuser."pxp".$signingtime."pxp".$signinguser."pxp".$huohao."pxp".$smstatus."pxp".$stationname."pxp".$signingkind."pxp".$homenumber."pxp".$homename."pxp".$homeway."pxp".$waipaitime."pxp".$waipaiuser."pxp".$picstatus."pxp".$payway."pxp".$paycontent."pxp".$direction."pxp";	
+			$response=$response.$expressno."pxp".$expressname."pxp".$expresstype."pxp".$daofuprice."pxp".$daifuprice."pxp".$diandantime."pxp".$diandanuser."pxp".$phonenumber."pxp".$bangdingtime."pxp".$bangdinguser."pxp".$distributeway."pxp".$distributetime."pxp".$distributeuser."pxp".$signingtime."pxp".$signinguser."pxp".$huohao."pxp".$smstatus."pxp".$stationname."pxp".$signingkind."pxp".$homenumber."pxp".$homename."pxp".$homeway."pxp".$waipaitime."pxp".$waipaiuser."pxp".$picstatus."pxp".$payway."pxp".$paycontent."pxp".$direction."pxp".$pickup."pxp";	
 		
 		}
         if($response=="")
