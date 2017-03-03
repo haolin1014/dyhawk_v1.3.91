@@ -703,8 +703,8 @@ function  shujutongbu($username,$stationaccount,$main_username)
 		     $num= mysql_numrows ($result);
 		     if($num==0)
 		     {  //在插入状态，将duanxintime同时插入diandantime
-		        $sqlstr="INSERT INTO `logistics` (`pdasn`, `stationaccount`,`expressno`,`diandantime`,`diandanuser`,`phonenumber`,`distributeway`,`distributeuser`,`distributetime`,`huohao`,`msm_sn`,`homenumber`,`homename`,`homeway`,`reason`,`expressname`,`onlinetime`) 
-VALUES ('$pdasn','$stationaccount', '$expressno', '$duanxintime','$duanxinuser', '$phonenumber','1','$duanxinuser', '$duanxintime','$huohao','$msm_sn','$homenumber','$homename','$homeway','$reason','$expresscode','$onlinetime')";	
+		        $sqlstr="INSERT INTO `logistics` (`pdasn`, `stationaccount`,`expressno`,`diandantime`,`diandanuser`,`phonenumber`,`distributeway`,`distributeuser`,`distributetime`,`huohao`,`msm_sn`,`homenumber`,`homename`,`homeway`,`reason`,`expressname`,`onlinetime`,`smstatus`) 
+VALUES ('$pdasn','$stationaccount', '$expressno', '$duanxintime','$duanxinuser', '$phonenumber','1','$duanxinuser', '$duanxintime','$huohao','$msm_sn','$homenumber','$homename','$homeway','$reason','$expresscode','$onlinetime','1')";	
 
 							  								                mysql_query($sqlstr,$db4);  	
 		   	  }
@@ -719,7 +719,7 @@ VALUES ('$pdasn','$stationaccount', '$expressno', '$duanxintime','$duanxinuser',
 				{
 				$expcode="";
 				} 	
-		        $sqlstr="UPDATE `logistics` SET `phonenumber` = '$phonenumber',`distributeway`='1',`distributetime` = '$duanxintime',`distributeuser` = '$duanxinuser',`huohao` = '$huohao',`msm_sn`='$msm_sn',`homenumber`='$homenumber',`homename`='$homename',`homeway`='$homeway',`reason`='$reason'  $expcode WHERE `id` ='$id' LIMIT 1";								  							              
+		        $sqlstr="UPDATE `logistics` SET `phonenumber` = '$phonenumber',`distributeway`='1',`distributetime` = '$duanxintime',`distributeuser` = '$duanxinuser',`huohao` = '$huohao',`msm_sn`='$msm_sn',`homenumber`='$homenumber',`homename`='$homename',`homeway`='$homeway',`reason`='$reason',`smstatus`='1'  $expcode WHERE `id` ='$id' LIMIT 1";								  							              
 				 mysql_query($sqlstr,$db4);  			   
 		      } 
 
