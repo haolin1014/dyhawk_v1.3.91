@@ -268,37 +268,7 @@ function  shujuxiazai($username,$stationaccount)
    $responsex="";
    $response="";
    //logistics
-    $result = mysql_query("SELECT phonenumber,homenumber,homename,homeway FROM  logistics  where  stationaccount='$stationaccount'   group by phonenumber",$db4);  
-    $num= mysql_numrows($result);
-	$str=array();
-   for($i=0;$i<$num;$i++)
-   {  
-  	 $str[$i*4+0]=urlencode(mysql_result($result,$i,"phonenumber"))."pxp";
-	 $str[$i*4+1]=urlencode(mysql_result($result,$i,"homenumber"))."pxp";	
-  	 $str[$i*4+2]=urlencode(mysql_result($result,$i,"homename"))."pxp";
-	 $str[$i*4+3]=urlencode(mysql_result($result,$i,"homeway"))."pxp";		  	 	  	
-   }
-    $response=$response.implode('',$str);
-		
-	//logistics_a
-	$responsex="";
-    $result = mysql_query("SELECT phonenumber,homenumber,homename,homeway FROM  logistics_a  where  stationaccount='$stationaccount'    group by phonenumber",$db4);  
-    $num= mysql_numrows($result);
-	
-	$str=array();
-   for($i=0;$i<$num;$i++)
-   {  
-  	 $str[$i*4+0]=urlencode(mysql_result($result,$i,"phonenumber"))."pxp";
-	 $str[$i*4+1]=urlencode(mysql_result($result,$i,"homenumber"))."pxp";	
-  	 $str[$i*4+2]=urlencode(mysql_result($result,$i,"homename"))."pxp";
-	 $str[$i*4+3]=urlencode(mysql_result($result,$i,"homeway"))."pxp";		  	 	  	
-   }
-    $response=$response.implode('',$str);
-	
-	//logistics_b
-	$responsex="";
-	$timecx=time()-3600*24*365;  //一年的时间
-    $result = mysql_query("SELECT phonenumber,homenumber,homename,homeway FROM  logistics_b  where  stationaccount='$stationaccount'  and diandantime>$timecx   group by phonenumber  ",$db4);  
+    $result = mysql_query("SELECT phonenumber,homenumber,homename,homeway FROM  logistics  where  stationaccount='$stationaccount'   group by phonenumber union SELECT phonenumber,homenumber,homename,homeway FROM  logistics_a  where  stationaccount='$stationaccount'  group by phonenumber",$db4);  
     $num= mysql_numrows($result);
 	$str=array();
    for($i=0;$i<$num;$i++)
@@ -778,7 +748,7 @@ VALUES ('$pdasn','$stationaccount', '$expressno', '$duanxintime','$duanxinuser',
 		   
 		   //判断该运单是否存在
 		   $onlinetime=time();
-		   $result = mysql_query("SELECT id FROM  logistics  where  stationaccount='$stationaccount'  and  expressno='$expressno'   order by   id   desc  limit 1",$db4); 	   
+		   $result = mysql_query("SELECT id,phonenumber FROM  logistics  where  stationaccount='$stationaccount'  and  expressno='$expressno'   order by   id   desc  limit 1",$db4); 	   
 		    
 		   $num= mysql_numrows ($result);
 		   if($num==0)
@@ -813,7 +783,11 @@ VALUES ('$pdasn','$stationaccount', '$expressno', '$duanxintime','$duanxinuser',
 				} 			
 		     
 				 $sqlstr="UPDATE `logistics` SET  `signingtime` = '$qiandantime',`signinguser` = '$qiandanuser',`signingkind` = '$qiandankind',`direction` = '$direction' ,`picstatus` = '$picstatus'  $expcode  $zdstatus WHERE `id` ='$id' LIMIT 1";								  							              
-				 mysql_query($sqlstr,$db4);  			   
+				 mysql_query($sqlstr,$db4);  	
+				 
+				 // whl完成订单推送微信
+		         $number=mysql_result($result,0,"phonenumber");
+		         add_wxnoticestatus($expressno,$number,$qiandankind,$stationaccount,$db4);		   
 		   } 	
 		}
 
@@ -898,6 +872,12 @@ VALUES ('$pdasn','$stationaccount', '$expressno', '$duanxintime','$duanxinuser',
 			if($num2!=0)
 			{
 				$pickup=mysql_result($respickup,0,"pickup");
+			}else{
+			   $respickup = mysql_query("SELECT  pickup FROM  smtbx_endorder  where  packageID='$expressno' and devicesn='$pdasn'  order by id  desc limit 1",$db2);  
+				$num3= mysql_numrows($respickup);
+				if($num3!=0){
+				$pickup=mysql_result($respickup,0,"pickup");	
+				}
 			}
 
 			$response=$response.$expressno."pxp".$expressname."pxp".$expresstype."pxp".$daofuprice."pxp".$daifuprice."pxp".$diandantime."pxp".$diandanuser."pxp".$phonenumber."pxp".$bangdingtime."pxp".$bangdinguser."pxp".$distributeway."pxp".$distributetime."pxp".$distributeuser."pxp".$signingtime."pxp".$signinguser."pxp".$huohao."pxp".$smstatus."pxp".$stationname."pxp".$signingkind."pxp".$homenumber."pxp".$homename."pxp".$homeway."pxp".$waipaitime."pxp".$waipaiuser."pxp".$picstatus."pxp".$payway."pxp".$paycontent."pxp".$direction."pxp".$pickup."pxp";		   
@@ -972,7 +952,13 @@ VALUES ('$pdasn','$stationaccount', '$expressno', '$duanxintime','$duanxinuser',
 		   if($num2!=0)
 		   {
 		   		$pickup=mysql_result($respickup,0,"pickup");
-		   }
+		   }else{
+			   $respickup = mysql_query("SELECT  pickup FROM  smtbx_endorder  where  packageID='$expressno' and devicesn='$pdasn'  order by id  desc limit 1",$db2);  
+				$num3= mysql_numrows($respickup);
+				if($num3!=0){
+				$pickup=mysql_result($respickup,0,"pickup");	
+				}
+			}
 		   
 			$response=$response.$expressno."pxp".$expressname."pxp".$expresstype."pxp".$daofuprice."pxp".$daifuprice."pxp".$diandantime."pxp".$diandanuser."pxp".$phonenumber."pxp".$bangdingtime."pxp".$bangdinguser."pxp".$distributeway."pxp".$distributetime."pxp".$distributeuser."pxp".$signingtime."pxp".$signinguser."pxp".$huohao."pxp".$smstatus."pxp".$stationname."pxp".$signingkind."pxp".$homenumber."pxp".$homename."pxp".$homeway."pxp".$waipaitime."pxp".$waipaiuser."pxp".$picstatus."pxp".$payway."pxp".$paycontent."pxp".$direction."pxp".$pickup."pxp";	
 		
@@ -2382,7 +2368,11 @@ function post($url,$data){
    return $ret; 
  }
  
- 
+ // 完成订单微信推送 whl 2017.3.10
+function add_wxnoticestatus($expressno,$number,$status,$stationaccount,$db){
+	$wxnoticestatus = "INSERT INTO kmsmsend.noticestatus ( `number`,`mobile`,`status`,`stationaccount`) VALUES ('$expressno','$number', '$status','$stationaccount')";
+	mysql_query($wxnoticestatus, $db);
+}
  
  
  

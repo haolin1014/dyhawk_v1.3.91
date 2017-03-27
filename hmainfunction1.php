@@ -1,6 +1,7 @@
 <?php
 //include_once ("../weixinserve/smsserve.php");
 include_once ("../weixinserve/smsservep.php");
+include_once ("../sms1/lib/SendMsm.class.php");
 //========================================    
 /******************
 执行函数入口
@@ -25,13 +26,13 @@ function  domethod($json3,$stationaccount,$pdasn)
       	$response=shujuxiazai($json3["username"],$stationaccount);
 		break;							
 		case  "duanxin":
-      	$response=duanxin($json3["username"],$stationaccount,$pdasn,$json3["duanxinstr"]);
+      	$response=duanxin($json3["username"],$stationaccount,$pdasn,$json3["duanxinstr"],$json3['main_username']);
 		break;
 		case  "uploadduanyu":
       	$response=uploadduanyu($json3["username"],$stationaccount,$json3["duanyustr"]);
 		break;			
 		case  "shujutongbu":
-      	$response=shujutongbu($json3["username"],$stationaccount);
+      	$response=shujutongbu($json3["username"],$stationaccount,$json3['main_username']);
 		break;
 		case  "qiandan":
       	$response=qiandan($json3["username"],$stationaccount,$pdasn,$json3["qiandanstr"]);
@@ -50,6 +51,9 @@ function  domethod($json3,$stationaccount,$pdasn)
 		break;						
 		case  "jijian":
       	$response=jijian($json3["username"],$stationaccount,$json3["jijianstr"]);
+      	break;	
+      	case  "jijian1":
+      	$response=jijian1($json3["username"],$stationaccount,$json3["jijianstr"]);
 		break;
 		case  "jijiantongji":
       	$response=jijiantongji($json3["username"],$stationaccount,$json3["jijiantongjistr"]);
@@ -113,14 +117,26 @@ function  domethod($json3,$stationaccount,$pdasn)
        $db=conn();
         $result = mysql_query("SELECT * FROM user  where  username='$username' ",$db);  
 		$num= mysql_numrows ($result);
-		if($num!=0)
-		{	
-		  $activation=mysql_result($result,0,"activation");	
-		  $fund=mysql_result($result,0,"fund");
-		  $rate=mysql_result($result,0,"rate");
-		  $name=mysql_result($result,0,"name");
+		$main_username = '';
+		// whl查询是否是子账户登录
+		if($num==0){
+		  $data = searchChildUsername($username,$db);
+		  if($data){
+		  	$parent_username = $data['parent_username'];
+		  	$main_username = $parent_username; 
+		    $result = mysql_query("SELECT * FROM user  where  username='$parent_username' limit 1",$db);
+		    $name = $data['name'];
+		    $activation=mysql_result($result,0,"activation");	
+		    $fund=mysql_result($result,0,"fund");
+		    $rate=mysql_result($result,0,"rate");
+		  }
+		}else{
+			$activation=mysql_result($result,0,"activation");	
+		  	$fund=mysql_result($result,0,"fund");
+		  	$rate=mysql_result($result,0,"rate");
+			$name=mysql_result($result,0,"name");
 		}
-		 $response="$activation"."pxp"."$fund"."pxp"."$rate"."pxp"."$name"."pxp"."0"."pxp";
+		 $response="$activation"."pxp"."$fund"."pxp"."$rate"."pxp"."$name"."pxp"."0"."pxp"."$main_username"."pxp";
 		return  $response;			
 	}
 	
@@ -319,7 +335,7 @@ function  shujuxiazai($username,$stationaccount)
   
 }
 //----------------数据同步---------------------------------
-function  shujutongbu($username,$stationaccount)
+function  shujutongbu($username,$stationaccount,$main_username)
 {
    
    
@@ -350,7 +366,7 @@ function  shujutongbu($username,$stationaccount)
    }   
  
    //短信短语
-   $result = mysql_query("SELECT *  FROM  phrase  where  username='$username' order by id",$db);  
+   $result = mysql_query("SELECT *  FROM  phrase  where  username='$main_username' order by id",$db);  
    $num= mysql_numrows($result);
    $response2="";
    for($i=0;$i<$num;$i++)
@@ -359,7 +375,7 @@ function  shujutongbu($username,$stationaccount)
    } 
    
     //用户账户金额费率
-   $result = mysql_query("SELECT *  FROM  user  where  username='$username'  limit 1",$db);  
+   $result = mysql_query("SELECT *  FROM  user  where  username='$main_username'  limit 1",$db);  
    $num= mysql_numrows($result);
    $response3="";
    for($i=0;$i<$num;$i++)
@@ -543,14 +559,14 @@ function  shujutongbu($username,$stationaccount)
 
 
 //----------------------短信发送-----------------------------------------------
-	function duanxin($username,$stationaccount,$pdasn,$duanxinstr)
+	function duanxin($username,$stationaccount,$pdasn,$duanxinstr,$main_username)
 	{
 		
 	   	$db4=conn4();
 		$db1=conn1();
 		$db=conn();
 		//欠费限制
-		 $result = mysql_query("SELECT * FROM user  where  username='$username' ",$db);  
+		 $result = mysql_query("SELECT * FROM user  where  username='$main_username' ",$db);  
          $num= mysql_numrows ($result);
 		 $fund=0;
 		 if($num!=0)
@@ -626,10 +642,58 @@ function  shujutongbu($username,$stationaccount)
 			   			   
 	 		   $end_msm_num=$end_msm_num+$msm_num;  //累加短信数
 			   
-			   	//序列号产生
-	 		   $m_date= date('YmdHis');
-     		   $m_time = mb_substr(microtime(), 2,6); 
-     		   $msm_sn=$m_date.$m_time;	   
+	   		       //发送短信
+	   			   
+	   			$rcvnumber_o=str_replace(" ", "", $phonenumber);
+	   			   
+	   			//内容的组装：货号+content
+	   			if($stationtype==0)
+	   			{
+	   				$m_content=$content;
+	   				
+                    $m_content_dx = $m_content;
+
+	   			}
+	   			else
+	   			{
+	   						    //加上快递公司名称
+	   				$exname="";
+	   				$result = mysql_query("SELECT expressname FROM  logistics  where  stationaccount='$stationaccount'  and  expressno='$expressno' limit 1",$db4);  
+	   		        $num= mysql_numrows ($result);
+	   				if($num!=0)
+	   				{
+	   				    $expressname=mysql_result($result,0,"expressname");
+	   					$result = mysql_query("SELECT name FROM  expresscompany  where  code='$expressname'limit 1",$db4);  
+	   		        	$num= mysql_numrows ($result);
+	   					if($num!=0)
+	   					{
+	   					  $exname=mysql_result($result,0,"name");
+	   					}								
+	   				}		    		
+	   			   $m_content="<取货号:".$huohao.$waystr.">".$content." ".$exname;
+	   			 
+
+	   			   
+	   			}
+	   			 
+	   					   
+	   			$m_content=str_replace("'","",$m_content); //有这个字符存不进数据库 
+	   			$m_content_dx=str_replace("'","",$m_content_dx); //有这个字符存不进数据库
+	   			
+	   			$wx_content = "<取货号:".$huohao.">".$m_content_dx;
+	   			 
+	   			$sendtime=mktime();
+	   			$frequency=0;
+	   			$status="0";  //0待发，1已发送，2成功，3失
+	   			
+	   			$stationid=$stationaccount;  //  
+	   			
+	            //whl 发送短信
+				$res = SendMsm::sendOneSMSforBox($rcvnumber_o, $m_content_dx, $main_username, '','', $huohao,$stationid,1,$wx_content,$expressno,'',1);
+				$resjson = json_decode($res,true);
+				$res = $resjson['status']==0 ? 1 : 0;
+				$msm_sn = $resjson['msm_sn'];
+				//whl
 			   			   
 			   
 			   //对运单物流表进行补充更新
@@ -639,8 +703,8 @@ function  shujutongbu($username,$stationaccount)
 		     $num= mysql_numrows ($result);
 		     if($num==0)
 		     {  //在插入状态，将duanxintime同时插入diandantime
-		        $sqlstr="INSERT INTO `logistics` (`pdasn`, `stationaccount`,`expressno`,`diandantime`,`diandanuser`,`phonenumber`,`distributeway`,`distributeuser`,`distributetime`,`huohao`,`msm_sn`,`homenumber`,`homename`,`homeway`,`reason`,`expressname`,`onlinetime`) 
-VALUES ('$pdasn','$stationaccount', '$expressno', '$duanxintime','$duanxinuser', '$phonenumber','1','$duanxinuser', '$duanxintime','$huohao','$msm_sn','$homenumber','$homename','$homeway','$reason','$expresscode','$onlinetime')";	
+		        $sqlstr="INSERT INTO `logistics` (`pdasn`, `stationaccount`,`expressno`,`diandantime`,`diandanuser`,`phonenumber`,`distributeway`,`distributeuser`,`distributetime`,`huohao`,`msm_sn`,`homenumber`,`homename`,`homeway`,`reason`,`expressname`,`onlinetime`,`smstatus`) 
+VALUES ('$pdasn','$stationaccount', '$expressno', '$duanxintime','$duanxinuser', '$phonenumber','1','$duanxinuser', '$duanxintime','$huohao','$msm_sn','$homenumber','$homename','$homeway','$reason','$expresscode','$onlinetime','1')";	
 
 							  								                mysql_query($sqlstr,$db4);  	
 		   	  }
@@ -655,118 +719,13 @@ VALUES ('$pdasn','$stationaccount', '$expressno', '$duanxintime','$duanxinuser',
 				{
 				$expcode="";
 				} 	
-		        $sqlstr="UPDATE `logistics` SET `phonenumber` = '$phonenumber',`distributeway`='1',`distributetime` = '$duanxintime',`distributeuser` = '$duanxinuser',`huohao` = '$huohao',`msm_sn`='$msm_sn',`homenumber`='$homenumber',`homename`='$homename',`homeway`='$homeway',`reason`='$reason'  $expcode WHERE `id` ='$id' LIMIT 1";								  							              
+		        $sqlstr="UPDATE `logistics` SET `phonenumber` = '$phonenumber',`distributeway`='1',`distributetime` = '$duanxintime',`distributeuser` = '$duanxinuser',`huohao` = '$huohao',`msm_sn`='$msm_sn',`homenumber`='$homenumber',`homename`='$homename',`homeway`='$homeway',`reason`='$reason',`smstatus`='1'  $expcode WHERE `id` ='$id' LIMIT 1";								  							              
 				 mysql_query($sqlstr,$db4);  			   
 		      } 
-			  
-		  
-			  
-  
-			  
-			  	
-		       //发送短信
-			   
-			$rcvnumber_o=str_replace(" ", "", $phonenumber);
-			   
-			//内容的组装：货号+content
-			if($stationtype==0)
-			{
-				$m_content="<取货号:".$huohao.">".$content;
-				
-				//短信取货号屏蔽处理     //add by 2016.11.24 
-			   $m_content_dx=$m_content;
-			  
-			   if(smslimit($stationaccount,$db4)==1)
-			   {
-			      $m_content_dx=$content;  
-			   }
-			   
-			}
-			else
-			{
-						    //加上快递公司名称
-				$exname="";
-				$result = mysql_query("SELECT expressname FROM  logistics  where  stationaccount='$stationaccount'  and  expressno='$expressno' limit 1",$db4);  
-		        $num= mysql_numrows ($result);
-				if($num!=0)
-				{
-				    $expressname=mysql_result($result,0,"expressname");
-					$result = mysql_query("SELECT name FROM  expresscompany  where  code='$expressname'limit 1",$db4);  
-		        	$num= mysql_numrows ($result);
-					if($num!=0)
-					{
-					  $exname=mysql_result($result,0,"name");
-					}								
-				}		    		
-			   $m_content="<取货号:".$huohao.$waystr.">".$content." ".$exname;
-			 
-
-			   
-			}
-			 
-					   
-			$m_content=str_replace("'","",$m_content); //有这个字符存不进数据库 
-			$m_content_dx=str_replace("'","",$m_content_dx); //有这个字符存不进数据库
-			
-			
-			 
-			$sendtime=mktime();
-			$frequency=0;
-			$status="0";  //0待发，1已发送，2成功，3失
-			
-			$stationid=$stationaccount;  //  
-			
-			//$smsflg=getweixinswitchsms($rcvnumber_o);  //weixin 
-			$smsflg=getweixinswitchsms($rcvnumber_o,$db);  //weixin 
-			
-			if($smsflg!=2) //weixin  只要不等于2，不关注、关注需要短信  这两种情况都发短信
-			{ 
-			   if($content!="")  //内容为空的运单将不发送短信
-			   {			   
-			   		$sqlstr="INSERT INTO  `msmwait` ( `username` ,`rcvnumber` ,`sendtime` ,`huohao` ,`stationid` ,`frequency`,`status`,`content`,`msm_sn`  ) 
-                                  VALUES ('$username', '$rcvnumber_o',  '$sendtime',  '$huohao', '$stationid', '$frequency', '$status', '$m_content_dx', '$msm_sn')";								  								 
-                    mysql_query($sqlstr,$db1); 
-			   }			  
-
-			}
-			if($smsflg!=0)  //关注后才发微信
-			{
-			  //sendmessagetoweixin($rcvnumber_o,$huohao,"",$expressno,$content,"1");	//weixin 
-			  sendmessagetoweixin($stationid,$msm_sn,$rcvnumber_o,$huohao,"","",$expressno,"您可点开此条消息，转发好友代取",$m_content,"0",$db);  					
-			}
 
 		   
 		  }//end for
 		  
-		   //扣除费用,可以为负数，下次若为负数，就不允许发送
-		  $result = mysql_query("SELECT * FROM user  where  username='$username' ",$db);  
-          $num= mysql_numrows ($result);
-          if(($num!=0)&&($content!="")) //在内容为空的情况下，不发送短信也不扣费用
-		  {
-		     $fund=mysql_result($result,0,"fund");
-		     $rate=mysql_result($result,0,"rate");
-			 if($rate==0)
-			 {
-			   $rate=70; //默认7分/条
-			 }
-			 else if($rate==1000)
-			 {
-			    $rate=0; //不收费
-			 }
-		     $needfund=$end_msm_num*$rate;
-			 $befor_fund=$fund;
-		     $fund=$fund-$needfund;
-			 $after_fund=$fund;	
-    		 $sqlstr="UPDATE  `user` SET  `fund` =  '$fund'  WHERE  `username` =$username  LIMIT 1" ;
-             mysql_query($sqlstr,$db);
-			 
-			 	//扣除费用记录
-            $sqlstr="INSERT INTO  `consumingrecords` (`username` ,`beforsend` ,`aftersend` ,`msm_num` ,`operation` ,`time` ) 
-VALUES ('$username',  '$befor_fund',  '$after_fund',  '$end_msm_num',  '1',  '$sendtime')" ;
-    mysql_query($sqlstr,$db);
-			 			 
-		  
-		  } 
 			
 		}
 		else
@@ -931,7 +890,17 @@ VALUES ('$username',  '$befor_fund',  '$after_fund',  '$end_msm_num',  '1',  '$s
 		   
 		   $direction=urlencode(mysql_result($result,$i,"direction"));
 		   
-			$response=$response.$expressno."pxp".$expressname."pxp".$expresstype."pxp".$daofuprice."pxp".$daifuprice."pxp".$diandantime."pxp".$diandanuser."pxp".$phonenumber."pxp".$bangdingtime."pxp".$bangdinguser."pxp".$distributeway."pxp".$distributetime."pxp".$distributeuser."pxp".$signingtime."pxp".$signinguser."pxp".$huohao."pxp".$smstatus."pxp".$stationname."pxp".$signingkind."pxp".$homenumber."pxp".$homename."pxp".$homeway."pxp".$waipaitime."pxp".$waipaiuser."pxp".$picstatus."pxp".$payway."pxp".$paycontent."pxp".$direction."pxp";		   
+		   // whl添加pickup
+		   $pickup ='';
+		   $respickup = mysql_query("SELECT  pickup FROM  smtbx_order  where  packageID='$expressno' and devicesn='$pdasn' ",$db2);  
+				$num2= mysql_numrows($respickup);
+
+			if($num2!=0)
+			{
+				$pickup=mysql_result($respickup,0,"pickup");
+			}
+
+			$response=$response.$expressno."pxp".$expressname."pxp".$expresstype."pxp".$daofuprice."pxp".$daifuprice."pxp".$diandantime."pxp".$diandanuser."pxp".$phonenumber."pxp".$bangdingtime."pxp".$bangdinguser."pxp".$distributeway."pxp".$distributetime."pxp".$distributeuser."pxp".$signingtime."pxp".$signinguser."pxp".$huohao."pxp".$smstatus."pxp".$stationname."pxp".$signingkind."pxp".$homenumber."pxp".$homename."pxp".$homeway."pxp".$waipaitime."pxp".$waipaiuser."pxp".$picstatus."pxp".$payway."pxp".$paycontent."pxp".$direction."pxp".$pickup."pxp";		   
 		
 		}
 
@@ -994,8 +963,18 @@ VALUES ('$username',  '$befor_fund',  '$after_fund',  '$end_msm_num',  '1',  '$s
 	 		}
 		      
 		   $direction=urlencode(mysql_result($result,$i,"direction"));
+
+		   // whl添加pickup
+	       $pickup ='';
+	       $respickup = mysql_query("SELECT  pickup FROM  smtbx_order  where  packageID='$expressno' and devicesn='$pdasn'",$db2);  
+	   	   $num2= mysql_numrows($respickup);
+
+		   if($num2!=0)
+		   {
+		   		$pickup=mysql_result($respickup,0,"pickup");
+		   }
 		   
-			$response=$response.$expressno."pxp".$expressname."pxp".$expresstype."pxp".$daofuprice."pxp".$daifuprice."pxp".$diandantime."pxp".$diandanuser."pxp".$phonenumber."pxp".$bangdingtime."pxp".$bangdinguser."pxp".$distributeway."pxp".$distributetime."pxp".$distributeuser."pxp".$signingtime."pxp".$signinguser."pxp".$huohao."pxp".$smstatus."pxp".$stationname."pxp".$signingkind."pxp".$homenumber."pxp".$homename."pxp".$homeway."pxp".$waipaitime."pxp".$waipaiuser."pxp".$picstatus."pxp".$payway."pxp".$paycontent."pxp".$direction."pxp";	
+			$response=$response.$expressno."pxp".$expressname."pxp".$expresstype."pxp".$daofuprice."pxp".$daifuprice."pxp".$diandantime."pxp".$diandanuser."pxp".$phonenumber."pxp".$bangdingtime."pxp".$bangdinguser."pxp".$distributeway."pxp".$distributetime."pxp".$distributeuser."pxp".$signingtime."pxp".$signinguser."pxp".$huohao."pxp".$smstatus."pxp".$stationname."pxp".$signingkind."pxp".$homenumber."pxp".$homename."pxp".$homeway."pxp".$waipaitime."pxp".$waipaiuser."pxp".$picstatus."pxp".$payway."pxp".$paycontent."pxp".$direction."pxp".$pickup."pxp";	
 		
 		}
         if($response=="")
@@ -1362,6 +1341,41 @@ function  shujutongji($username,$stationaccount,$shujutongjistr)
 		 $response="ok";
 		return  $response;			
 	} 
+	// 添加了省份
+	function jijian1($username,$stationaccount,$jijianstr)
+	{	
+	    $db4=conn4();
+        $yundan=split(",",$jijianstr);
+		$len=floor(count($yundan)/9);   //9为pda运单表的有效字段数
+		for($i=0;$i<$len;$i++)
+		{  
+		   $expressno=$yundan[$i*9+0];
+		   $expresscode=$yundan[$i*9+1];
+		   $weight=$yundan[$i*9+2];   
+		   $money=$yundan[$i*9+3];
+		   $jijianuser=$yundan[$i*9+4];
+		   $jijiantime=$yundan[$i*9+5];
+		   $dakehuname=$yundan[$i*9+6];
+		   $phonenumber=$yundan[$i*9+7];
+		   $province=$yundan[$i*9+8];
+		   
+		   $onlinetime=time();
+		  
+		   //判断该运单是否存在
+		        $sqlstr="delete from  jijianyundan  where  stationaccount='$stationaccount'  and  expressno='$expressno'";	
+                mysql_query($sqlstr,$db4); 
+		        $sqlstr="INSERT INTO `jijianyundan`(stationaccount,expressno,expresscode,weight,money,jijianuser,jijiantime,dakehuname,phonenumber,username,onlinetime,province) VALUES ('$stationaccount','$expressno','$expresscode','$weight','$money','$jijianuser','$jijiantime','$dakehuname','$phonenumber','$username','$onlinetime','$province')";	
+                mysql_query($sqlstr,$db4);  
+				
+								
+		  //关联面单，将同一个面单的状态改变为已寄件	
+		 mysql_query("UPDATE `expressbill` SET  `state` ='1'  where  stationaccount='$stationaccount'  and  expressno='$expressno' limit 1",$db4);   //state, 0未使用，1已使用，2作废	
+								
+		  
+		}		
+		 $response="ok";
+		return  $response;			
+	} 
  
 //----------------寄件统计---------------------------------
 
@@ -1551,7 +1565,7 @@ function  jijiantongji($username,$stationaccount,$jijiantongjistr)
 		 }
 		 else if($type==2)  
 		 {
-		      $result = mysql_query("SELECT * FROM  jijianyundan  where   phonenumber='$expressno'",$db4);
+		      $result = mysql_query("SELECT * FROM  jijianyundan  where   jijianuser='$expressno'",$db4);
 		 }
 		 else
 		 {
